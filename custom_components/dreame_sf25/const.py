@@ -89,9 +89,15 @@ DEFAULT_COMPACT_HOUR: Final = 15
 DEFAULT_COMPACT_MINUTE: Final = 0
 LID_COUNT_MAX: Final = 99              # tope de la entidad number
 
-# Se considera que un programa termino de forma natural si al acabar le
-# quedaba menos de esto (min). Si se cancela antes, el contador NO se reinicia.
+# Un programa se considera COMPLETADO (y reinicia el contador) si se cumple
+# cualquiera de estos criterios; con uno solo la deteccion era fragil, porque
+# perder contacto con el aparato cerca del final lo hacia parecer cancelado:
+#   1) se llego a ver una cuenta atras de <= NATURAL_END_REMAINING minutos,
+#   2) el aparato encadeno el "secado extra" (solo lo hace tras completar),
+#   3) transcurrio al menos (duracion - NATURAL_END_MARGIN) minutos desde que
+#      arranco, aunque no vieramos el tramo final.
 NATURAL_END_REMAINING: Final = 1
+NATURAL_END_MARGIN: Final = 5
 
 # Segundos tras enviar una orden en los que ignoramos los 'fin de programa':
 # la nube puede devolver todavia el estado anterior y provocar falsos finales.

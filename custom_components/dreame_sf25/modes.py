@@ -17,8 +17,14 @@ el triturado el aparato encadena a veces "secado extra" (2.3=1, ~2 h) y otras
 veces no. Si se cancelan a medias, o si lo que corrio fue Remover o
 Compactar, el contador se conserva.
 
-El estado (contador, modo virtual en curso y su vencimiento) se guarda en disco
-para sobrevivir a un reinicio de Home Assistant.
+Un programa se da por completado si se cumple cualquiera de tres criterios (ver
+_completed): se vio la cuenta atras casi en cero, el aparato encadeno el secado
+extra, o transcurrio practicamente toda su duracion. Con un solo criterio la
+deteccion era fragil: perder contacto en el tramo final hacia que un ciclo
+completo pareciera cancelado y el contador no se reiniciaba.
+
+El estado (contador, modo virtual, vencimiento y programa en curso) se guarda en
+disco para sobrevivir a un reinicio de Home Assistant.
 """
 from __future__ import annotations
 
@@ -36,6 +42,7 @@ from .const import (
     DEFAULT_COMPACT_MINUTE,
     DOMAIN,
     LID_COUNT_THRESHOLD,
+    NATURAL_END_MARGIN,
     NATURAL_END_REMAINING,
     PROGRAM_COMPACT,
     PROGRAM_MAP,
@@ -90,6 +97,10 @@ class DreameSF25Modes:
         self._last_lid: int | None = None
         self._last_program: int | None = None
         self._last_remaining: int | None = None
+        # seguimiento del programa que corre en el aparato, para saber si acabo
+        # de verdad aunque perdamos contacto cerca del final. Se persiste:
+        # {"program", "started_at", "total", "min_remaining"}
+        self._prog_run: dict | None = None
 
         self._unsub_timer = None
         self._unsub_daily = None
@@ -121,6 +132,8 @@ class DreameSF25Modes:
         self._virtual_until = float(data.get("virtual_until", 0) or 0)
         self.compact_hour = int(data.get("compact_hour", DEFAULT_COMPACT_HOUR))
         self.compact_minute = int(data.get("compact_minute", DEFAULT_COMPACT_MINUTE))
+        self._prog_run = data.get("prog_run")
+        self._last_program = data.get("last_program")
 
         self._schedule_daily()
 
@@ -153,6 +166,9 @@ class DreameSF25Modes:
                 "virtual_until": self._virtual_until,
                 "compact_hour": self.compact_hour,
                 "compact_minute": self.compact_minute,
+                # asi un reinicio de HA no pierde el programa en curso
+                "prog_run": self._prog_run,
+                "last_program": self._last_program,
             }
         )
 
@@ -277,8 +293,26 @@ class DreameSF25Modes:
             and (time.time() - self._command_at) > COMMAND_GRACE
         ):
             self.hass.async_create_task(
-                self._async_program_ended(self._last_program, self._last_remaining)
+                self._async_program_ended(self._last_program, self._prog_run, program)
             )
+
+        # --- seguimiento del programa en curso ---
+        if program is not None and program != _PROGRAM_IDLE:
+            run = self._prog_run
+            if run is None or run.get("program") != program:
+                self._prog_run = {
+                    "program": program,
+                    "started_at": time.time(),
+                    "total": remaining,
+                    "min_remaining": remaining,
+                }
+            elif remaining is not None:
+                if run.get("total") is None or remaining > run["total"]:
+                    run["total"] = remaining
+                if run.get("min_remaining") is None or remaining < run["min_remaining"]:
+                    run["min_remaining"] = remaining
+        elif program == _PROGRAM_IDLE:
+            self._prog_run = None
 
         if program is not None and program != _PROGRAM_IDLE and remaining is not None:
             self._last_remaining = remaining
@@ -305,11 +339,13 @@ class DreameSF25Modes:
         if program is not None:
             self._last_program = program
 
-    async def _async_program_ended(self, ended: int, last_remaining: int | None) -> None:
+    async def _async_program_ended(
+        self, ended: int, run: dict | None, new_program: int | None
+    ) -> None:
         """Un programa del aparato acaba de terminar.
 
-        `ended` es el programa que termina y `last_remaining` su ultimo tiempo
-        restante conocido, capturados antes de refrescar el estado.
+        `ended` es el programa que termina, `run` su seguimiento (arranque,
+        duracion y minimo visto) y `new_program` al que ha pasado.
         """
         if self.virtual_mode is not None or self._owns_program:
             # Remover/Compactar: NUNCA reinician el contador. Si el aparato paro
@@ -329,20 +365,50 @@ class DreameSF25Modes:
             await self._async_save()
             return
 
-        natural = last_remaining is not None and last_remaining <= NATURAL_END_REMAINING
+        name = PROGRAM_MAP.get(ended, ended)
+        natural, reason = self._completed(ended, run, new_program)
         if natural:
             _LOGGER.info(
-                "Programa %s completado; contador de aperturas a cero",
-                PROGRAM_MAP.get(ended, ended),
+                "Programa %s completado (%s); contador de aperturas a cero", name, reason
             )
             await self.async_reset_counter()
         else:
-            _LOGGER.debug(
-                "Programa %s cancelado (quedaban %s min); se conserva el contador (%s)",
-                PROGRAM_MAP.get(ended, ended),
-                last_remaining,
-                self.lid_count,
+            _LOGGER.info(
+                "Programa %s interrumpido (%s); se conserva el contador (%s)",
+                name, reason, self.lid_count,
             )
+
+    def _completed(
+        self, ended: int, run: dict | None, new_program: int | None
+    ) -> tuple[bool, str]:
+        """Decide si el programa llego a completarse. Devuelve (si, motivo).
+
+        Tres criterios independientes: basta con uno. Antes solo existia el
+        primero, y perder contacto con el aparato en el tramo final hacia que
+        un ciclo completo pareciera cancelado.
+        """
+        # 1) el aparato encadeno el secado extra: solo lo hace tras completar
+        if ended == _PROGRAM_CYCLE and new_program == _PROGRAM_EXTRA:
+            return True, "el aparato encadeno el secado extra"
+
+        if not run:
+            return False, "sin datos del programa"
+
+        # 2) llegamos a ver la cuenta atras casi en cero
+        min_rem = run.get("min_remaining")
+        if min_rem is not None and min_rem <= NATURAL_END_REMAINING:
+            return True, f"la cuenta atras llego a {min_rem} min"
+
+        # 3) transcurrio practicamente toda su duracion, aunque no vieramos el final
+        total = run.get("total")
+        started = run.get("started_at")
+        if total and started:
+            elapsed = (time.time() - started) / 60
+            if elapsed >= total - NATURAL_END_MARGIN:
+                return True, f"transcurrieron {elapsed:.0f} de {total} min"
+            return False, f"solo {elapsed:.0f} de {total} min"
+
+        return False, f"minimo visto {min_rem} min"
 
     async def _async_lid_closed(self, program: int | None) -> None:
         """La tapa se acaba de cerrar."""
