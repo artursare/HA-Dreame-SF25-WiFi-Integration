@@ -17,8 +17,6 @@ jobs:
         uses: hacs/action@main
         with:
           category: integration
-          # 'brands' se ignora porque el dominio aun no esta en home-assistant/brands
-          ignore: brands
 
   hassfest:
     name: Hassfest validation
