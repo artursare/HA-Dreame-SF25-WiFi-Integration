@@ -20,6 +20,7 @@ Mientras corre, ABRE Y CIERRA LA TAPA para comprobar la latencia real.
 Ctrl+C para parar. Requiere: pip install paho-mqtt
 """
 
+import hashlib
 import json
 import os
 import random
@@ -75,6 +76,34 @@ def random_agent_id() -> str:
     return "".join(random.choice("ABCDEF") for _ in range(13))
 
 
+# Huella SHA-256 del certificado del broker (ver const.py de la integracion).
+MQTT_CERT_SHA256 = "0a55ff4bbf5acbb52bfb1b7a941ea097c75f5ca58d0d5eb16464c1d255988200"
+
+
+class _PinnedSSLContext(ssl.SSLContext):
+    """Exige una huella concreta del certificado del broker."""
+
+    fingerprint: str = ""
+
+    def wrap_socket(self, sock, *args, **kwargs):
+        ssock = super().wrap_socket(sock, *args, **kwargs)
+        got = hashlib.sha256(ssock.getpeercert(binary_form=True) or b"").hexdigest()
+        if got != self.fingerprint:
+            ssock.close()
+            raise ssl.SSLCertVerificationError(
+                f"huella del broker inesperada: {got}; no se envian credenciales"
+            )
+        return ssock
+
+
+def _pinned_context() -> _PinnedSSLContext:
+    ctx = _PinnedSSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    ctx.fingerprint = MQTT_CERT_SHA256
+    return ctx
+
+
 def main():
     cloud, dev = connect_cloud()
     did = str(dev.get("did"))
@@ -98,8 +127,9 @@ def main():
         client = mqtt.Client(client_id, clean_session=True)
 
     client.username_pw_set(cloud.uid, cloud.access_token)
-    client.tls_set(cert_reqs=ssl.CERT_NONE)
-    client.tls_insecure_set(True)
+    # El broker usa un CA privado no verificable; se ancla su huella y se
+    # comprueba tras el handshake, antes de enviar usuario y token.
+    client.tls_set_context(_pinned_context())
 
     def on_connect(cl, userdata, flags, rc, *a):
         if rc == 0:

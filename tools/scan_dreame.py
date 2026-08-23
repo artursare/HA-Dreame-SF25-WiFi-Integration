@@ -55,8 +55,7 @@ BASIC_AUTH = "Basic ZHJlYW1lX2FwcHYxOkFQXmR2QHpAU1FZVnhOODg="
 DEFAULT_TENANT = "000000"
 
 _SSL_CTX = ssl.create_default_context()
-_SSL_CTX.check_hostname = False
-_SSL_CTX.verify_mode = ssl.CERT_NONE
+# verificacion TLS completa: por aqui viajan las credenciales de la cuenta
 
 
 def base_url() -> str:
@@ -268,12 +267,13 @@ def main():
     if "TU_PASSWORD" in password:
         password = getpass.getpass("Contrasena de Dreamehome (no se vera): ")
 
-    # --- Verificacion previa SIN contactar al servidor (no gasta intentos) ---
-    last = password[-1] if password else ""
-    print("\n--- Comprobacion de la contrasena (local, no se envia nada) ---")
-    print(f"  Longitud: {len(password)} caracteres")
-    print(f"  Primer caracter: {password[:1]!r}   Ultimo caracter: {last!r}")
-    print("  (Debe ser 15 caracteres y terminar en '3'.)")
+    # --- Confirmacion previa SIN contactar al servidor (no gasta intentos) ---
+    # No se imprime ningun detalle de la contrasena: esta salida suele acabar
+    # pegada en informes de error.
+    print("\n--- Listo para iniciar sesion ---")
+    if not password:
+        print("No has introducido contrasena.")
+        return
     ans = input("Escribe SI (mayusculas) para lanzar el login, cualquier otra cosa cancela: ").strip()
     if ans != "SI":
         print("Cancelado. No se ha gastado ningun intento.")

@@ -13,6 +13,7 @@ callback que el coordinator marshalea al loop de Home Assistant.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import random
@@ -24,11 +25,45 @@ import paho.mqtt
 import paho.mqtt.client as mqtt
 
 from .api import DreameSF25Client
+from .const import MQTT_CERT_SHA256
 
 _LOGGER = logging.getLogger(__name__)
 
 # rc=5 -> no autorizado (token caducado): reconectamos con credenciales frescas
 _RC_NOT_AUTHORIZED = 5
+
+
+class _PinnedSSLContext(ssl.SSLContext):
+    """Contexto TLS que exige una huella concreta del certificado del servidor.
+
+    El broker de Dreame usa un CA privado que OpenSSL no puede validar (ver
+    MQTT_CERT_SHA256 en const.py). En lugar de aceptar cualquier certificado,
+    se comprueba la huella justo despues del handshake y ANTES de que paho
+    envie el CONNECT con el usuario y el token.
+    """
+
+    fingerprint: str = ""
+
+    def wrap_socket(self, sock, *args, **kwargs):  # type: ignore[override]
+        ssock = super().wrap_socket(sock, *args, **kwargs)
+        der = ssock.getpeercert(binary_form=True) or b""
+        got = hashlib.sha256(der).hexdigest()
+        if got != self.fingerprint:
+            ssock.close()
+            raise ssl.SSLCertVerificationError(
+                "El certificado del broker MQTT no coincide con el esperado "
+                f"(huella {got}). No se envian credenciales."
+            )
+        return ssock
+
+
+def _pinned_context() -> _PinnedSSLContext:
+    ctx = _PinnedSSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    # La cadena no es verificable (CA privado sin AKI); la garantia la da el pin.
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    ctx.fingerprint = MQTT_CERT_SHA256
+    return ctx
 
 
 def _random_agent_id() -> str:
@@ -72,8 +107,7 @@ class DreameSF25Mqtt:
             client = mqtt.Client(client_id, clean_session=True)
 
         client.username_pw_set(username, password)
-        client.tls_set(cert_reqs=ssl.CERT_NONE)
-        client.tls_insecure_set(True)
+        client.tls_set_context(_pinned_context())
         client.reconnect_delay_set(1, 60)
         client.on_connect = self._on_connect
         client.on_disconnect = self._on_disconnect

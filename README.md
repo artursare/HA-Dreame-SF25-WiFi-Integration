@@ -149,6 +149,17 @@ It retries the stop command up to 3 times and fires a
 > network and the Dreame cloud being up. It does **not** replace the appliance's
 > own thermal cut-off. Limits live in `SAFETY_TEMP_LIMITS` (`const.py`).
 
+## Security
+
+Both channels that carry account credentials use verified TLS:
+
+- **Cloud API** — full certificate verification (all six regions present a
+  publicly trusted certificate).
+- **MQTT broker** — the broker uses a private CA that OpenSSL cannot validate,
+  so its certificate is **pinned by SHA-256 fingerprint** and checked right
+  after the handshake, *before* any credential is sent. A mismatch aborts the
+  connection; the integration keeps working via polling.
+
 ## Reverse engineering
 
 The tools in [`tools/`](tools/) are used for discovery:
@@ -310,6 +321,17 @@ que puedes usar para enviarte una notificación.
 > ⚠️ Es una protección **secundaria**: depende de que Home Assistant, tu red y la
 > nube de Dreame estén operativos. **No sustituye** al corte térmico del propio
 > aparato. Los límites están en `SAFETY_TEMP_LIMITS` (`const.py`).
+
+## Seguridad
+
+Los dos canales por los que viajan credenciales usan TLS verificado:
+
+- **API de la nube** — verificación completa del certificado (las seis regiones
+  presentan un certificado públicamente válido).
+- **Broker MQTT** — el broker usa un CA privado que OpenSSL no puede validar, así
+  que su certificado se **ancla por huella SHA-256** y se comprueba justo tras el
+  handshake, *antes* de enviar credencial alguna. Si no coincide, la conexión se
+  aborta y la integración sigue funcionando por sondeo.
 
 ## Ingeniería inversa
 

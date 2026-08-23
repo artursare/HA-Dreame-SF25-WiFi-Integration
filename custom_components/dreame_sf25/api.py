@@ -30,9 +30,10 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Verificacion TLS completa: los seis endpoints regionales presentan un
+# certificado publicamente valido (CN=*.iot.dreame.tech, DigiCert). Por aqui
+# viajan las credenciales de la cuenta, asi que no se relaja la comprobacion.
 _SSL_CTX = ssl.create_default_context()
-_SSL_CTX.check_hostname = False
-_SSL_CTX.verify_mode = ssl.CERT_NONE
 
 
 class DreameAuthError(Exception):

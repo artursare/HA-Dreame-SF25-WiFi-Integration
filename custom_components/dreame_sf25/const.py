@@ -124,6 +124,20 @@ SAFETY_TEMP_LIMITS_VIRTUAL: Final = {
 }
 EVENT_SAFETY_STOP: Final = "dreame_sf25_safety_stop"
 
+# --- TLS del broker MQTT ---
+# El broker NO presenta un certificado publicamente valido: usa un CA privado
+# autofirmado que ademas se identifica como "GlobalSign Root CA" y carece de
+# Authority Key Identifier, por lo que OpenSSL no puede validar la cadena (ni
+# siquiera con VERIFY_X509_PARTIAL_CHAIN). Como por ese canal viaja el token de
+# acceso, en vez de desactivar la verificacion se ancla (pin) la huella del
+# certificado del servidor y se comprueba nada mas completar el handshake,
+# antes de enviar credencial alguna.
+# El certificado cubre en su SAN todas las regiones (*.mt.eu, *.mt.us, ...),
+# de modo que la huella es la misma para cualquier usuario.
+# Si Dreame lo renovara, el push MQTT dejaria de conectar y la integracion
+# seguiria funcionando por sondeo; habria que actualizar este valor.
+MQTT_CERT_SHA256: Final = "0a55ff4bbf5acbb52bfb1b7a941ea097c75f5ca58d0d5eb16464c1d255988200"
+
 PROP_LID: Final = (6, 26)              # tapa: abierta/cerrada (binary_sensor)
 
 # Controles (escribibles):
