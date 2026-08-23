@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/maestrea76/Dreame-SF25-WIFI-HACS-Integration/main/brands/dreame_sf25/icon.png" width="120" alt="Dreame SF25">
+  <img src="https://raw.githubusercontent.com/maestrea76/HA-Dreame-SF25-WiFi-Integration/main/brands/dreame_sf25/icon.png" width="120" alt="Dreame SF25">
 </p>
 
 <p align="center">
-  <a href="https://github.com/maestrea76/Dreame-SF25-WIFI-HACS-Integration/actions/workflows/validate.yaml"><img src="https://github.com/maestrea76/Dreame-SF25-WIFI-HACS-Integration/actions/workflows/validate.yaml/badge.svg" alt="Validate"></a>
+  <a href="https://github.com/maestrea76/HA-Dreame-SF25-WiFi-Integration/actions/workflows/validate.yaml"><img src="https://github.com/maestrea76/HA-Dreame-SF25-WiFi-Integration/actions/workflows/validate.yaml/badge.svg" alt="Validate"></a>
   <a href="https://github.com/hacs/integration"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg" alt="HACS Custom"></a>
-  <a href="https://github.com/maestrea76/Dreame-SF25-WIFI-HACS-Integration/releases"><img src="https://img.shields.io/github/v/release/maestrea76/Dreame-SF25-WIFI-HACS-Integration?display_name=tag" alt="Release"></a>
-  <img src="https://img.shields.io/github/license/maestrea76/Dreame-SF25-WIFI-HACS-Integration" alt="License">
+  <a href="https://github.com/maestrea76/HA-Dreame-SF25-WiFi-Integration/releases"><img src="https://img.shields.io/github/v/release/maestrea76/HA-Dreame-SF25-WiFi-Integration?display_name=tag" alt="Release"></a>
+  <img src="https://img.shields.io/github/license/maestrea76/HA-Dreame-SF25-WiFi-Integration" alt="License">
 </p>
 
 # Dreame SF25 Waste Disposer — Home Assistant (HACS)
@@ -24,9 +24,9 @@ open API.
 ## Screenshots
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/maestrea76/Dreame-SF25-WIFI-HACS-Integration/main/docs/sensors.png" width="45%" alt="Sensors">
+  <img src="https://raw.githubusercontent.com/maestrea76/HA-Dreame-SF25-WiFi-Integration/main/docs/sensors.png" width="45%" alt="Sensors">
   &nbsp;
-  <img src="https://raw.githubusercontent.com/maestrea76/Dreame-SF25-WIFI-HACS-Integration/main/docs/controls.png" width="45%" alt="Controls">
+  <img src="https://raw.githubusercontent.com/maestrea76/HA-Dreame-SF25-WiFi-Integration/main/docs/controls.png" width="45%" alt="Controls">
 </p>
 
 ## How it works
@@ -50,7 +50,7 @@ safety net (every 5 min while push is alive, 30 s if it drops).
 
 1. Make sure [HACS](https://hacs.xyz) is installed.
 2. In HACS open **Integrations** → ⋮ (top right) → **Custom repositories**.
-3. Add the URL `https://github.com/maestrea76/Dreame-SF25-WIFI-HACS-Integration`,
+3. Add the URL `https://github.com/maestrea76/HA-Dreame-SF25-WiFi-Integration`,
    category **Integration**, and click **Add**.
 4. Search for **Dreame SF25 Waste Disposer**, open it and click **Download**.
 5. **Restart Home Assistant.**
@@ -197,9 +197,9 @@ el dispositivo no dispone de API abierta.
 ## Capturas
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/maestrea76/Dreame-SF25-WIFI-HACS-Integration/main/docs/sensors.png" width="45%" alt="Sensores">
+  <img src="https://raw.githubusercontent.com/maestrea76/HA-Dreame-SF25-WiFi-Integration/main/docs/sensors.png" width="45%" alt="Sensores">
   &nbsp;
-  <img src="https://raw.githubusercontent.com/maestrea76/Dreame-SF25-WIFI-HACS-Integration/main/docs/controls.png" width="45%" alt="Controles">
+  <img src="https://raw.githubusercontent.com/maestrea76/HA-Dreame-SF25-WiFi-Integration/main/docs/controls.png" width="45%" alt="Controles">
 </p>
 
 ## Cómo funciona
@@ -223,7 +223,7 @@ como red de seguridad (cada 5 min con el push vivo, 30 s si se cae).
 
 1. Asegúrate de tener [HACS](https://hacs.xyz) instalado.
 2. En HACS abre **Integraciones** → ⋮ (arriba a la derecha) → **Repositorios personalizados**.
-3. Añade la URL `https://github.com/maestrea76/Dreame-SF25-WIFI-HACS-Integration`,
+3. Añade la URL `https://github.com/maestrea76/HA-Dreame-SF25-WiFi-Integration`,
    categoría **Integration**, y pulsa **Añadir**.
 4. Busca **Dreame SF25 Waste Disposer**, ábrelo y pulsa **Descargar**.
 5. **Reinicia Home Assistant.**

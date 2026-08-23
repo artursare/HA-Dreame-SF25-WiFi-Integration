@@ -5,11 +5,11 @@
     "@maestrea76"
   ],
   "config_flow": true,
-  "documentation": "https://github.com/maestrea76/Dreame-SF25-WIFI-HACS-Integration",
+  "documentation": "https://github.com/maestrea76/HA-Dreame-SF25-WiFi-Integration",
   "iot_class": "cloud_push",
-  "issue_tracker": "https://github.com/maestrea76/Dreame-SF25-WIFI-HACS-Integration/issues",
+  "issue_tracker": "https://github.com/maestrea76/HA-Dreame-SF25-WiFi-Integration/issues",
   "requirements": [
     "paho-mqtt>=1.6.1"
   ],
-  "version": "0.4.0"
+  "version": "0.4.1"
 }
