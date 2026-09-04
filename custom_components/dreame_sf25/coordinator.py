@@ -7,6 +7,7 @@ Estrategia hibrida:
 from __future__ import annotations
 
 import logging
+import time
 from datetime import timedelta
 from typing import Any
 
@@ -31,6 +32,11 @@ from .mqtt import DreameSF25Mqtt
 
 _LOGGER = logging.getLogger(__name__)
 
+# El RPC de sondeo tarda varios segundos. Si un push MQTT llega mientras el
+# sondeo esta en vuelo, no dejamos que el resultado viejo pise el valor fresco
+# (p.ej. tapa abierta).
+_PUSH_TTL = 20.0
+
 
 class DreameSF25Coordinator(DataUpdateCoordinator[dict[tuple[int, int], Any]]):
     """Mantiene el estado del SF25 (push MQTT + sondeo de respaldo)."""
@@ -47,6 +53,7 @@ class DreameSF25Coordinator(DataUpdateCoordinator[dict[tuple[int, int], Any]]):
         self.mqtt = DreameSF25Mqtt(client, self._handle_push)
         # evita repetir la parada mientras la temperatura siga alta
         self._safety_tripped = False
+        self._push_at: dict[tuple[int, int], float] = {}
         self.modes = DreameSF25Modes(hass, self, entry.entry_id)
 
     # ------------------------------------------------------------------- push
@@ -70,6 +77,9 @@ class DreameSF25Coordinator(DataUpdateCoordinator[dict[tuple[int, int], Any]]):
 
     @callback
     def _apply_push(self, updates: dict[tuple[int, int], Any]) -> None:
+        now = time.monotonic()
+        for key in updates:
+            self._push_at[key] = now
         data = dict(self.data or {})
         data.update(updates)
         self._sync_interval()
@@ -176,7 +186,11 @@ class DreameSF25Coordinator(DataUpdateCoordinator[dict[tuple[int, int], Any]]):
         self._sync_interval()
         # el sondeo confirma el estado completo; el push solo trae lo que cambia
         merged = dict(self.data or {})
-        merged.update(data)
+        now = time.monotonic()
+        for key, value in data.items():
+            if now - self._push_at.get(key, 0.0) < _PUSH_TTL:
+                continue
+            merged[key] = value
         self._check_safety(merged)
         self.modes.handle_update(merged)
         return merged

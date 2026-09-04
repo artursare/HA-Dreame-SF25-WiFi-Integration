@@ -80,19 +80,40 @@ def random_agent_id() -> str:
 MQTT_CERT_SHA256 = "0a55ff4bbf5acbb52bfb1b7a941ea097c75f5ca58d0d5eb16464c1d255988200"
 
 
+def _verify_pin(ssock, fingerprint: str) -> None:
+    got = hashlib.sha256(ssock.getpeercert(binary_form=True) or b"").hexdigest()
+    if got != fingerprint:
+        try:
+            ssock.close()
+        except Exception:
+            pass
+        raise ssl.SSLCertVerificationError(
+            f"huella del broker inesperada: {got}; no se envian credenciales"
+        )
+
+
 class _PinnedSSLContext(ssl.SSLContext):
-    """Exige una huella concreta del certificado del broker."""
+    """Exige una huella concreta del certificado del broker.
+
+    paho hace wrap_socket(..., do_handshake_on_connect=False) y el handshake
+    despues: hay que anclar la huella al terminar do_handshake, no antes.
+    """
 
     fingerprint: str = ""
 
     def wrap_socket(self, sock, *args, **kwargs):
+        do_handshake = kwargs.get("do_handshake_on_connect", True)
         ssock = super().wrap_socket(sock, *args, **kwargs)
-        got = hashlib.sha256(ssock.getpeercert(binary_form=True) or b"").hexdigest()
-        if got != self.fingerprint:
-            ssock.close()
-            raise ssl.SSLCertVerificationError(
-                f"huella del broker inesperada: {got}; no se envian credenciales"
-            )
+        if do_handshake:
+            _verify_pin(ssock, self.fingerprint)
+            return ssock
+        orig = ssock.do_handshake
+
+        def do_handshake_and_pin(*a, **k):
+            orig(*a, **k)
+            _verify_pin(ssock, self.fingerprint)
+
+        ssock.do_handshake = do_handshake_and_pin
         return ssock
 
 
