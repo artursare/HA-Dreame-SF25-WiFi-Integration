@@ -102,5 +102,21 @@
         "name": "Hora de compactar"
       }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Disparos automaticos",
+        "description": "Remover y Compactar los lanza la integracion, no el aparato. Con el disparo desactivado solo se ejecutan cuando los pides a mano.",
+        "data": {
+          "stir_enabled": "Remover automatico al cerrar la tapa",
+          "stir_threshold": "Aperturas de tapa entre un Remover y el siguiente",
+          "stir_duration_min": "Duracion de Remover (minutos)",
+          "compact_enabled": "Compactar automatico diario",
+          "compact_threshold": "Aperturas de tapa minimas para Compactar",
+          "compact_duration_min": "Duracion de Compactar (minutos)"
+        }
+      }
+    }
   }
 }

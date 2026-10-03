@@ -50,8 +50,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: DreameSF25ConfigEntry) -
     await coordinator.async_start_push()
 
     entry.runtime_data = coordinator
+    # Recargar al guardar opciones: los disparos automaticos se leen en caliente
+    # desde entry.options, pero el temporizador diario y las duraciones ya
+    # programadas solo se rehacen al montar de nuevo la entrada.
+    entry.async_on_unload(entry.add_update_listener(_async_update_options))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+async def _async_update_options(hass: HomeAssistant, entry: DreameSF25ConfigEntry) -> None:
+    """Se llama cuando el usuario guarda el flujo de opciones."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: DreameSF25ConfigEntry) -> bool:

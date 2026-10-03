@@ -41,7 +41,13 @@ from .const import (
     DEFAULT_COMPACT_HOUR,
     DEFAULT_COMPACT_MINUTE,
     DOMAIN,
-    LID_COUNT_THRESHOLD,
+    OPTION_DEFAULTS,
+    OPT_COMPACT_DURATION,
+    OPT_COMPACT_ENABLED,
+    OPT_COMPACT_THRESHOLD,
+    OPT_STIR_DURATION,
+    OPT_STIR_ENABLED,
+    OPT_STIR_THRESHOLD,
     NATURAL_END_MARGIN,
     NATURAL_END_REMAINING,
     PROGRAM_COMPACT,
@@ -52,7 +58,6 @@ from .const import (
     PROP_PROGRAM,
     PROP_REMAINING_TIME,
     STORAGE_VERSION,
-    VIRTUAL_DURATIONS,
 )
 
 if TYPE_CHECKING:
@@ -77,6 +82,12 @@ class DreameSF25Modes:
         self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}")
 
         self.lid_count: int = 0
+        # Valor de lid_count cuando corrio el ultimo Remover. El disparo
+        # compara la DIFERENCIA contra el umbral, no el total: asi el
+        # umbral vuelve a cerrarse despues de cada Remover en vez de
+        # quedarse abierto para siempre, que es lo que hacia que cada
+        # cierre de tapa lanzara uno nuevo.
+        self._stir_anchor: int = 0
         self.virtual_mode: str | None = None
         self._virtual_until: float = 0.0
         # hora del disparo diario de Compactar (editable desde HA)
@@ -105,6 +116,16 @@ class DreameSF25Modes:
         self._unsub_timer = None
         self._unsub_daily = None
 
+    # ----------------------------------------------------------- opciones
+    def _opt(self, key: str):
+        """Opcion de la entrada, con su valor por defecto historico."""
+        return self.coordinator.entry.options.get(key, OPTION_DEFAULTS[key])
+
+    def _duration(self, mode: str) -> int:
+        """Duracion en segundos del modo virtual, segun opciones."""
+        key = OPT_STIR_DURATION if mode == PROGRAM_STIR else OPT_COMPACT_DURATION
+        return max(1, int(self._opt(key))) * 60
+
     @property
     def virtual_remaining_minutes(self) -> int | None:
         """Minutos que faltan del modo virtual, deducidos del contador del aparato.
@@ -120,7 +141,7 @@ class DreameSF25Modes:
         if current is None:
             return None
         elapsed = self._virtual_start_remaining - current
-        total = VIRTUAL_DURATIONS[self.virtual_mode] // 60
+        total = self._duration(self.virtual_mode) // 60
         return max(0, total - elapsed)
 
     # ------------------------------------------------------------ ciclo de vida
@@ -128,6 +149,7 @@ class DreameSF25Modes:
         """Restaura el estado guardado y reprograma lo pendiente."""
         data = await self._store.async_load() or {}
         self.lid_count = int(data.get("lid_count", 0))
+        self._stir_anchor = min(int(data.get("stir_anchor", 0)), self.lid_count)
         self.virtual_mode = data.get("virtual_mode")
         self._virtual_until = float(data.get("virtual_until", 0) or 0)
         self.compact_hour = int(data.get("compact_hour", DEFAULT_COMPACT_HOUR))
@@ -162,6 +184,7 @@ class DreameSF25Modes:
         await self._store.async_save(
             {
                 "lid_count": self.lid_count,
+                "stir_anchor": self._stir_anchor,
                 "virtual_mode": self.virtual_mode,
                 "virtual_until": self._virtual_until,
                 "compact_hour": self.compact_hour,
@@ -196,6 +219,8 @@ class DreameSF25Modes:
     async def async_set_lid_count(self, value: int) -> None:
         """Fija el contador de aperturas (editable desde HA)."""
         self.lid_count = max(0, int(value))
+        # el ancla nunca puede quedar por encima del contador
+        self._stir_anchor = min(self._stir_anchor, self.lid_count)
         await self._async_save()
         self.coordinator.async_update_listeners()
 
@@ -222,30 +247,58 @@ class DreameSF25Modes:
         esta parada NO se confunda con el final de un programa real.
         """
         self._cancel_timer()
+        try:
+            await self._async_set_program(_PROGRAM_IDLE)
+        except Exception as err:  # noqa: BLE001
+            # Si no se pudo parar, el aparato sigue con su autolimpieza. Aun asi
+            # soltamos el modo virtual: mostrar el programa real es mas fiel que
+            # seguir anunciando Remover/Compactar.
+            _LOGGER.error("No se pudo parar %s: %s", self.virtual_mode, err)
+        else:
+            # El cache todavia trae 2.3=2 hasta el siguiente sondeo. Darlo por
+            # inactivo ya evita que current_option del select caiga al programa
+            # crudo ("autolimpieza") durante ~1 s al limpiar virtual_mode: ese
+            # parpadeo hacia que un Remover de 10 min se anunciara como una
+            # autolimpieza terminada.
+            if self.coordinator.data is not None:
+                self.coordinator.data[PROP_PROGRAM] = _PROGRAM_IDLE
         self.virtual_mode = None
         self._virtual_until = 0.0
         self._virtual_start_remaining = None
-        await self._async_set_program(_PROGRAM_IDLE)
         await self._async_save()
         await self.coordinator.async_request_refresh()
 
     # -------------------------------------------------------------------- ordenes
     async def _async_set_program(self, value: int) -> None:
+        """Escribe el programa. PROPAGA el fallo: quien llama decide que hacer.
+
+        Antes se capturaba aqui y solo se registraba, asi que async_start_virtual
+        seguia adelante y marcaba un modo virtual que el aparato no estaba
+        ejecutando: HA mostraba una hora de Compactar fantasma. api.set_property
+        ya despierta el aparato y reintenta una vez antes de lanzar, de modo que
+        una excepcion aqui es un fallo real y no una simple suspension.
+        """
         siid, piid = PROP_PROGRAM
         self._command_at = time.time()
-        try:
-            await self.hass.async_add_executor_job(
-                self.coordinator.client.set_property, siid, piid, value
-            )
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.error("No se pudo escribir el programa %s: %s", value, err)
+        await self.hass.async_add_executor_job(
+            self.coordinator.client.set_property, siid, piid, value
+        )
 
     async def async_start_virtual(self, mode: str) -> None:
         """Arranca Remover o Compactar (autolimpieza acotada)."""
-        duration = VIRTUAL_DURATIONS[mode]
+        duration = self._duration(mode)
         self._owns_program = True
         self._virtual_start_remaining = None
-        await self._async_set_program(_PROGRAM_SELF_CLEAN)
+        try:
+            await self._async_set_program(_PROGRAM_SELF_CLEAN)
+        except Exception as err:  # noqa: BLE001
+            # Sin esto quedaba un ciclo fantasma: la escritura fallaba, se
+            # registraba el error, y aun asi se marcaba virtual_mode con su
+            # temporizador. HA mostraba una hora de Compactar que el aparato
+            # nunca ejecuto, y la unica pista era una linea en el registro.
+            self._owns_program = False
+            _LOGGER.error("No se pudo iniciar %s: %s", mode, err)
+            return
         self.virtual_mode = mode
         self._virtual_until = time.time() + duration
         self._schedule_expiry(duration)
@@ -266,6 +319,7 @@ class DreameSF25Modes:
 
     async def async_reset_counter(self) -> None:
         self.lid_count = 0
+        self._stir_anchor = 0
         await self._async_save()
         self.coordinator.async_update_listeners()
 
@@ -421,16 +475,30 @@ class DreameSF25Modes:
             return  # ya estamos removiendo/compactando: no reiniciar ni cancelar
         if program is not None and program != _PROGRAM_IDLE:
             return  # hay un programa en marcha: no interrumpimos
-        if self.lid_count >= LID_COUNT_THRESHOLD:
+        if not self._opt(OPT_STIR_ENABLED):
+            return
+        threshold = max(1, int(self._opt(OPT_STIR_THRESHOLD)))
+        # Diferencia contra el ancla, no total acumulado. Comparando el total,
+        # el umbral se abria con la tercera apertura y ya nunca se cerraba,
+        # porque nada en el camino de Remover reinicia el contador: a partir de
+        # ahi cada cierre de tapa lanzaba otro Remover de 10 min.
+        if self.lid_count - self._stir_anchor >= threshold:
             _LOGGER.info(
-                "Tapa cerrada con %s aperturas acumuladas: iniciando Remover",
-                self.lid_count,
+                "Tapa cerrada: %s aperturas desde el ultimo Remover (umbral %s); iniciando Remover",
+                self.lid_count - self._stir_anchor, threshold,
             )
             await self.async_start_virtual(PROGRAM_STIR)
+            # El ancla solo avanza si de verdad arranco; si fallo, el siguiente
+            # cierre vuelve a intentarlo.
+            if self.virtual_mode is not None:
+                self._stir_anchor = self.lid_count
+                await self._async_save()
 
     async def _async_daily_compact(self, _now) -> None:
         """Disparo diario de Compactar a la hora configurada."""
-        if self.lid_count < LID_COUNT_THRESHOLD:
+        if not self._opt(OPT_COMPACT_ENABLED):
+            return
+        if self.lid_count < max(1, int(self._opt(OPT_COMPACT_THRESHOLD))):
             return
         if self.virtual_mode is not None:
             return

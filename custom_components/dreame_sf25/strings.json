@@ -102,5 +102,21 @@
         "name": "Hora de compactar"
       }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Automatic triggers",
+        "description": "Stir and Compact are started by the integration, not by the appliance. With a trigger disabled they only run when you start them by hand.",
+        "data": {
+          "stir_enabled": "Automatic Stir when the lid closes",
+          "stir_threshold": "Lid openings between one Stir and the next",
+          "stir_duration_min": "Stir duration (minutes)",
+          "compact_enabled": "Automatic daily Compact",
+          "compact_threshold": "Minimum lid openings for Compact",
+          "compact_duration_min": "Compact duration (minutes)"
+        }
+      }
+    }
   }
 }

@@ -89,6 +89,25 @@ DEFAULT_COMPACT_HOUR: Final = 15
 DEFAULT_COMPACT_MINUTE: Final = 0
 LID_COUNT_MAX: Final = 99              # tope de la entidad number
 
+# --- Opciones de la entrada (flujo de opciones) ----------------------------
+# Los valores por defecto replican el comportamiento historico, de modo que una
+# entrada sin opciones guardadas se comporta exactamente igual que antes.
+OPT_STIR_ENABLED: Final = "stir_enabled"
+OPT_STIR_THRESHOLD: Final = "stir_threshold"
+OPT_STIR_DURATION: Final = "stir_duration_min"
+OPT_COMPACT_ENABLED: Final = "compact_enabled"
+OPT_COMPACT_THRESHOLD: Final = "compact_threshold"
+OPT_COMPACT_DURATION: Final = "compact_duration_min"
+
+OPTION_DEFAULTS: Final = {
+    OPT_STIR_ENABLED: True,
+    OPT_STIR_THRESHOLD: LID_COUNT_THRESHOLD,
+    OPT_STIR_DURATION: VIRTUAL_DURATIONS[PROGRAM_STIR] // 60,
+    OPT_COMPACT_ENABLED: True,
+    OPT_COMPACT_THRESHOLD: LID_COUNT_THRESHOLD,
+    OPT_COMPACT_DURATION: VIRTUAL_DURATIONS[PROGRAM_COMPACT] // 60,
+}
+
 # Un programa se considera COMPLETADO (y reinicia el contador) si se cumple
 # cualquiera de estos criterios; con uno solo la deteccion era fragil, porque
 # perder contacto con el aparato cerca del final lo hacia parecer cancelado:
