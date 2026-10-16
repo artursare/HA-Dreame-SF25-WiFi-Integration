@@ -11,6 +11,15 @@ CONF_DID: Final = "did"
 CONF_AUTO_MODES: Final = "auto_modes"
 CONF_SAFETY_STOP: Final = "safety_stop"
 CONF_VIRTUAL_MODES: Final = "virtual_modes"
+# Detalle dentro de auto_modes: una casa puede querer el Compactar diario sin
+# el Remover al cerrar la tapa. Ambos van por defecto a True porque solo
+# cuentan cuando auto_modes ya esta activado, asi que el valor seguro de
+# "todo apagado de fabrica" no cambia.
+CONF_AUTO_STIR: Final = "auto_stir"
+CONF_AUTO_COMPACT: Final = "auto_compact"
+CONF_STIR_THRESHOLD: Final = "stir_threshold"
+CONF_STIR_DURATION: Final = "stir_duration_min"
+CONF_COMPACT_DURATION: Final = "compact_duration_min"
 
 DEFAULT_REGION: Final = "eu"
 REGIONS: Final = ["eu", "cn", "us", "ru", "sg", "kr"]
@@ -91,6 +100,16 @@ LID_COUNT_THRESHOLD: Final = 3         # aperturas de tapa necesarias
 DEFAULT_COMPACT_HOUR: Final = 15
 DEFAULT_COMPACT_MINUTE: Final = 0
 LID_COUNT_MAX: Final = 99              # tope de la entidad number
+
+# Valores por defecto de las opciones de detalle. Replican el comportamiento
+# historico, de modo que una entrada sin opciones se comporta igual que antes.
+OPTION_DEFAULTS: Final = {
+    CONF_AUTO_STIR: True,
+    CONF_AUTO_COMPACT: True,
+    CONF_STIR_THRESHOLD: LID_COUNT_THRESHOLD,
+    CONF_STIR_DURATION: VIRTUAL_DURATIONS[PROGRAM_STIR] // 60,
+    CONF_COMPACT_DURATION: VIRTUAL_DURATIONS[PROGRAM_COMPACT] // 60,
+}
 
 # Un programa se considera COMPLETADO (y reinicia el contador) si se cumple
 # cualquiera de estos criterios; con uno solo la deteccion era fragil, porque

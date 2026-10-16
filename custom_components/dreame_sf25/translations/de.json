@@ -107,11 +107,16 @@
     "step": {
       "init": {
         "title": "Automatische Aktionen",
-        "description": "Beide Optionen sind zunächst aus. Automatische Modi starten das Gerät nach Deckelbewegungen; die Temperaturabschaltung kann ein laufendes Programm unterbrechen. Behälter nach Anleitung vorbereiten; die Kurzprogramme verwenden die Selbstreinigung.",
+        "description": "Beide Optionen sind zunächst aus. Automatische Modi starten das Gerät nach Deckelbewegungen; die Temperaturabschaltung kann ein laufendes Programm unterbrechen. Behälter nach Anleitung vorbereiten; die Kurzprogramme verwenden die Selbstreinigung. Umruehren und Verdichten lassen sich unten einzeln aktivieren.",
         "data": {
           "auto_modes": "Rühren/Verdichten automatisch starten",
           "safety_stop": "Temperaturabschaltung über die Cloud erlauben",
-          "virtual_modes": "Experimentelle Kurzprogramme freigeben"
+          "virtual_modes": "Experimentelle Kurzprogramme freigeben",
+          "auto_stir": "  ↳ Umruehren beim Schliessen des Deckels",
+          "stir_threshold": "  ↳ Deckeloeffnungen zwischen Umruehren",
+          "stir_duration_min": "  ↳ Dauer Umruehren (Minuten)",
+          "auto_compact": "  ↳ Taegliches Verdichten",
+          "compact_duration_min": "  ↳ Dauer Verdichten (Minuten)"
         }
       }
     }

@@ -107,11 +107,16 @@
     "step": {
       "init": {
         "title": "Acciones automáticas",
-        "description": "Ambas opciones están desactivadas por defecto. Los modos automáticos arrancan el aparato; la parada por temperatura puede interrumpir un programa. Requieren preparar el recipiente según el manual; usan el programa de autolimpieza.",
+        "description": "Ambas opciones están desactivadas por defecto. Los modos automáticos arrancan el aparato; la parada por temperatura puede interrumpir un programa. Requieren preparar el recipiente según el manual; usan el programa de autolimpieza. Stir and Compact can be enabled separately below.",
         "data": {
           "auto_modes": "Iniciar Remover/Compactar automáticamente",
           "safety_stop": "Permitir parada por temperatura desde la nube",
-          "virtual_modes": "Habilitar modos cortos experimentales"
+          "virtual_modes": "Habilitar modos cortos experimentales",
+          "auto_stir": "  ↳ Stir when the lid closes",
+          "stir_threshold": "  ↳ Lid openings between Stirs",
+          "stir_duration_min": "  ↳ Stir duration (minutes)",
+          "auto_compact": "  ↳ Daily Compact",
+          "compact_duration_min": "  ↳ Compact duration (minutes)"
         }
       }
     }

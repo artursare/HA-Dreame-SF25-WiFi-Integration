@@ -38,8 +38,14 @@ from homeassistant.helpers.event import async_call_later, async_track_time_chang
 from homeassistant.helpers.storage import Store
 
 from .const import (
+    CONF_AUTO_COMPACT,
     CONF_AUTO_MODES,
+    CONF_AUTO_STIR,
+    CONF_COMPACT_DURATION,
+    CONF_STIR_DURATION,
+    CONF_STIR_THRESHOLD,
     CONF_VIRTUAL_MODES,
+    OPTION_DEFAULTS,
     COMMAND_GRACE,
     DEFAULT_COMPACT_HOUR,
     DEFAULT_COMPACT_MINUTE,
@@ -55,7 +61,6 @@ from .const import (
     PROP_PROGRAM,
     PROP_REMAINING_TIME,
     STORAGE_VERSION,
-    VIRTUAL_DURATIONS,
 )
 
 if TYPE_CHECKING:
@@ -80,6 +85,13 @@ class DreameSF25Modes:
         self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}")
 
         self.lid_count: int = 0
+        # Valor de lid_count cuando corrio el ultimo Remover. El disparo mira
+        # la DIFERENCIA contra el umbral, no el total: comparando el total, el
+        # umbral se abria con la tercera apertura y ya no volvia a cerrarse,
+        # porque nada en el camino de Remover reinicia el contador (es tambien
+        # la senal de llenado de Compactar). Medido en un u2527: seis cierres
+        # de tapa seguidos, seis Remover, contador de 3 a 8.
+        self._stir_anchor: int = 0
         self.virtual_mode: str | None = None
         self._virtual_until: float = 0.0
         # hora del disparo diario de Compactar (editable desde HA)
@@ -108,6 +120,16 @@ class DreameSF25Modes:
         self._unsub_timer = None
         self._unsub_daily = None
 
+    # ----------------------------------------------------------- opciones
+    def _opt(self, key: str):
+        """Opcion de detalle, con su valor por defecto historico."""
+        return self.coordinator.entry.options.get(key, OPTION_DEFAULTS[key])
+
+    def _duration(self, mode: str) -> int:
+        """Duracion en segundos del modo virtual, segun opciones."""
+        key = CONF_STIR_DURATION if mode == PROGRAM_STIR else CONF_COMPACT_DURATION
+        return max(1, int(self._opt(key))) * 60
+
     @property
     def virtual_remaining_minutes(self) -> int | None:
         """Minutos que faltan del modo virtual, deducidos del contador del aparato.
@@ -123,7 +145,7 @@ class DreameSF25Modes:
         if current is None:
             return None
         elapsed = self._virtual_start_remaining - current
-        total = VIRTUAL_DURATIONS[self.virtual_mode] // 60
+        total = self._duration(self.virtual_mode) // 60
         return max(0, total - elapsed)
 
     # ------------------------------------------------------------ ciclo de vida
@@ -131,6 +153,7 @@ class DreameSF25Modes:
         """Restaura el estado guardado y reprograma lo pendiente."""
         data = await self._store.async_load() or {}
         self.lid_count = int(data.get("lid_count", 0))
+        self._stir_anchor = min(int(data.get("stir_anchor", 0)), self.lid_count)
         self.virtual_mode = data.get("virtual_mode")
         self._owns_program = self.virtual_mode is not None
         self._virtual_until = float(data.get("virtual_until", 0) or 0)
@@ -166,6 +189,7 @@ class DreameSF25Modes:
         await self._store.async_save(
             {
                 "lid_count": self.lid_count,
+                "stir_anchor": self._stir_anchor,
                 "virtual_mode": self.virtual_mode,
                 "virtual_until": self._virtual_until,
                 "compact_hour": self.compact_hour,
@@ -200,6 +224,8 @@ class DreameSF25Modes:
     async def async_set_lid_count(self, value: int) -> None:
         """Fija el contador de aperturas (editable desde HA)."""
         self.lid_count = max(0, int(value))
+        # el ancla nunca puede quedar por encima del contador
+        self._stir_anchor = min(self._stir_anchor, self.lid_count)
         await self._async_save()
         self.coordinator.async_update_listeners()
 
@@ -236,6 +262,13 @@ class DreameSF25Modes:
             raise HomeAssistantError("No se pudo verificar el programa activo")
         if self._owns_program and program == _PROGRAM_SELF_CLEAN:
             await self._async_set_program(_PROGRAM_IDLE)
+            # El cache sigue trayendo 2.3=2 hasta el refresco final, y
+            # virtual_mode se limpia justo debajo: en esa ventana
+            # current_option del select cae al programa crudo
+            # ("autolimpieza") y un Remover de 10 min se anuncia como una
+            # autolimpieza terminada. Darlo por inactivo aqui la cierra.
+            if self.coordinator.data is not None:
+                self.coordinator.data[PROP_PROGRAM] = _PROGRAM_IDLE
         self._cancel_timer()
         self.virtual_mode = None
         self._virtual_until = 0.0
@@ -260,7 +293,7 @@ class DreameSF25Modes:
         program = _as_int((self.coordinator.data or {}).get(PROP_PROGRAM))
         if program != _PROGRAM_IDLE:
             raise HomeAssistantError("The SF25 must be idle before starting a virtual mode")
-        duration = VIRTUAL_DURATIONS[mode]
+        duration = self._duration(mode)
         await self._async_set_program(_PROGRAM_SELF_CLEAN)
         self._owns_program = True
         self._virtual_start_remaining = None
@@ -284,6 +317,7 @@ class DreameSF25Modes:
 
     async def async_reset_counter(self) -> None:
         self.lid_count = 0
+        self._stir_anchor = 0
         await self._async_save()
         self.coordinator.async_update_listeners()
 
@@ -441,16 +475,29 @@ class DreameSF25Modes:
         ):
             return
 
+        if not self._opt(CONF_AUTO_STIR):
+            return
         if self.virtual_mode is not None:
             return  # ya estamos removiendo/compactando: no reiniciar ni cancelar
         if program != _PROGRAM_IDLE:
             return  # hay un programa en marcha: no interrumpimos
-        if self.lid_count >= LID_COUNT_THRESHOLD:
-            _LOGGER.info(
-                "Tapa cerrada con %s aperturas acumuladas: iniciando Remover",
-                self.lid_count,
-            )
+
+        threshold = max(1, int(self._opt(CONF_STIR_THRESHOLD)))
+        if self.lid_count - self._stir_anchor < threshold:
+            return
+        _LOGGER.info(
+            "Tapa cerrada: %s aperturas desde el ultimo Remover (umbral %s); iniciando Remover",
+            self.lid_count - self._stir_anchor, threshold,
+        )
+        try:
             await self.async_start_virtual(PROGRAM_STIR)
+        except HomeAssistantError as err:
+            # El arranque revalida el estado y puede rechazar por una carrera.
+            # No movemos el ancla: el siguiente cierre lo vuelve a intentar.
+            _LOGGER.info("No se inicio Remover: %s", err)
+            return
+        self._stir_anchor = self.lid_count
+        await self._async_save()
 
     async def _async_daily_compact(self, _now) -> None:
         """Disparo diario de Compactar a la hora configurada."""
@@ -458,6 +505,8 @@ class DreameSF25Modes:
             self.coordinator.entry.options.get(CONF_AUTO_MODES, False)
             and self.coordinator.entry.options.get(CONF_VIRTUAL_MODES, False)
         ):
+            return
+        if not self._opt(CONF_AUTO_COMPACT):
             return
         if self.lid_count < LID_COUNT_THRESHOLD:
             return

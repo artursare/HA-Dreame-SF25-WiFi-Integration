@@ -107,11 +107,16 @@
     "step": {
       "init": {
         "title": "Acciones automáticas",
-        "description": "Ambas opciones están desactivadas por defecto. Los modos automáticos arrancan el aparato; la parada por temperatura puede interrumpir un programa. Requieren preparar el recipiente según el manual; usan el programa de autolimpieza.",
+        "description": "Ambas opciones están desactivadas por defecto. Los modos automáticos arrancan el aparato; la parada por temperatura puede interrumpir un programa. Requieren preparar el recipiente según el manual; usan el programa de autolimpieza. Remover y Compactar se pueden activar por separado abajo.",
         "data": {
           "auto_modes": "Iniciar Remover/Compactar automáticamente",
           "safety_stop": "Permitir parada por temperatura desde la nube",
-          "virtual_modes": "Habilitar modos cortos experimentales"
+          "virtual_modes": "Habilitar modos cortos experimentales",
+          "auto_stir": "  ↳ Remover al cerrar la tapa",
+          "stir_threshold": "  ↳ Aperturas de tapa entre Remover",
+          "stir_duration_min": "  ↳ Duracion de Remover (minutos)",
+          "auto_compact": "  ↳ Compactar diario",
+          "compact_duration_min": "  ↳ Duracion de Compactar (minutos)"
         }
       }
     }

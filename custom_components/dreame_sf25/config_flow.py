@@ -11,11 +11,17 @@ from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 
 from .api import DreameApiError, DreameAuthError, DreameSF25Client
 from .const import (
+    CONF_AUTO_COMPACT,
     CONF_AUTO_MODES,
+    CONF_AUTO_STIR,
+    CONF_COMPACT_DURATION,
     CONF_DID,
     CONF_REGION,
     CONF_SAFETY_STOP,
+    CONF_STIR_DURATION,
+    CONF_STIR_THRESHOLD,
     CONF_VIRTUAL_MODES,
+    OPTION_DEFAULTS,
     DEFAULT_REGION,
     DOMAIN,
     REGIONS,
@@ -101,6 +107,29 @@ class DreameSF25OptionsFlow(OptionsFlow):
                         CONF_VIRTUAL_MODES,
                         default=options.get(CONF_VIRTUAL_MODES, False),
                     ): bool,
+                    # Detalle dentro de auto_modes: solo cuentan cuando este
+                    # ya esta activado, asi que el defecto seguro no cambia.
+                    vol.Required(
+                        CONF_AUTO_STIR, default=_cur(options, CONF_AUTO_STIR)
+                    ): bool,
+                    vol.Required(
+                        CONF_STIR_THRESHOLD, default=_cur(options, CONF_STIR_THRESHOLD)
+                    ): vol.All(int, vol.Range(min=1, max=99)),
+                    vol.Required(
+                        CONF_STIR_DURATION, default=_cur(options, CONF_STIR_DURATION)
+                    ): vol.All(int, vol.Range(min=1, max=90)),
+                    vol.Required(
+                        CONF_AUTO_COMPACT, default=_cur(options, CONF_AUTO_COMPACT)
+                    ): bool,
+                    vol.Required(
+                        CONF_COMPACT_DURATION,
+                        default=_cur(options, CONF_COMPACT_DURATION),
+                    ): vol.All(int, vol.Range(min=1, max=180)),
                 }
             ),
         )
+
+
+def _cur(options, key):
+    """Valor actual de una opcion de detalle, con su defecto historico."""
+    return options.get(key, OPTION_DEFAULTS[key])
